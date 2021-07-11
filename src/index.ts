@@ -126,7 +126,7 @@ app.use('/api/v1', (() => {
   return router
 })())
 
-app.use((err: { status: number, body: Record<string, unknown> }, req: Request, res: Response, next: NextFunction) => {
+app.use((err: { status: number, body: Record<string, unknown> }, _: Request, res: Response, next: NextFunction) => {
   if (err?.status) {
     return res.status(err.status).send(err.body || { error: 'Something error' })
   }
