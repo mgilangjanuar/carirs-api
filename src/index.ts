@@ -164,4 +164,4 @@ app.use((err: { status: number, body: Record<string, unknown> }, _: Request, res
 
 app.use((_, res) => res.status(404).send({ error: 'Not found' }))
 
-app.listen(4000, () => console.log('Starting app at :4000...'))
+app.listen(process.env.PORT || 4000, () => console.log(`Starting app at :${process.env.PORT || '4000'}...`))
