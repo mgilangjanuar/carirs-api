@@ -10,6 +10,7 @@
     "build": "rimraf dist && eslint --fix -c .eslintrc.js --ext .ts . && tsc"
   },
   "devDependencies": {
+    "@types/ioredis": "^4.26.5",
     "@types/node": "^16.3.1",
     "@typescript-eslint/eslint-plugin": "^4.28.2",
     "@typescript-eslint/parser": "^4.28.2",
@@ -22,6 +23,7 @@
   "dependencies": {
     "@types/express": "^4.17.13",
     "carirs": "^0.2.0",
-    "express": "^4.17.1"
+    "express": "^4.17.1",
+    "ioredis": "^4.27.6"
   }
 }

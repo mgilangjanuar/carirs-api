@@ -2,9 +2,19 @@ import express, { Router } from 'express'
 import { CariRS } from 'carirs'
 import { Request, Response } from 'express-serve-static-core'
 import { NextFunction } from 'connect'
+import Redis from 'ioredis'
 
 const app = express()
 const cariRS = new CariRS()
+const redis = new Redis({ keyPrefix: 'carirs' })
+
+async function getFromCacheFirst<T = any>(key: string, fn: () => Promise<T> | T, sec: number = 1) {
+  const data = await redis.get(key)
+  if (key) return JSON.parse(data)
+  const result = await fn()
+  await redis.set(key, JSON.stringify(result), 'EX', sec)
+  return result
+}
 
 app.get('/', (_, res) => {
   return res.send({
@@ -74,20 +84,26 @@ app.get('/ping', (_, res) => res.send({ pong: true }))
 app.use('/api/v1', (() => {
   const router = Router()
 
-  router.get('/provinces', (req, res) => {
+  router.get('/provinces', async (req, res) => {
     const { q } = req.query
-    if (q) {
-      return res.send(cariRS.findProvinces(q as string))
-    }
-    return res.send(cariRS.getProvinces())
+    const data = await getFromCacheFirst(`provinces:${q || 'null'}`, () => {
+      if (q) {
+        return cariRS.findProvinces(q as string)
+      }
+      return cariRS.getProvinces()
+    }, 86400)
+    return res.send(data)
   })
 
-  router.get('/cities', (req, res) => {
+  router.get('/cities', async (req, res) => {
     const { provinceId, q } = req.query
-    if (provinceId) {
-      return res.send(cariRS.getCities(provinceId as string))
-    }
-    return res.send(cariRS.findCities(q as string))
+    const data = await getFromCacheFirst(`cities:${provinceId || 'null'}:${q || 'null'}`, () => {
+      if (provinceId) {
+        return cariRS.getCities(provinceId as string)
+      }
+      return cariRS.findCities(q as string)
+    }, 86400)
+    return res.send(data)
   })
 
   router.get('/hospitals', async (req, res, next) => {
@@ -95,16 +111,23 @@ app.use('/api/v1', (() => {
     if (type && type !== 'covid' && type !== 'noncovid') {
       return next({ status: 400, body: { error: 'Parameter type is only for `covid` or `noncovid`' } })
     }
-    if (q) {
-      return res.send({
-        info: 'The data is static and not returned the total and available rooms, use parameters `provinceId` and `cityId` to view the real-time data.',
-        ...cariRS.findHospitals(q as string, type as 'covid' | 'noncovid' | undefined)
-      })
+    try {
+      const data = await getFromCacheFirst(`hospitals:${type || 'null'}:${provinceId || 'null'}:${cityId || 'null'}:${q || null}`, async () => {
+        if (q) {
+          return {
+            info: 'The data is static and not returned the total and available rooms, use parameters `provinceId` and `type` to view the real-time data.',
+            ...cariRS.findHospitals(q as string, type as 'covid' | 'noncovid' | undefined)
+          }
+        }
+        if (!type || !provinceId) {
+          throw { status: 400, body: { error: '`type` and `provinceId` are required in URL parameter.' } }
+        }
+        return await cariRS.getHospitals(type as 'covid' | 'noncovid', provinceId as string, cityId as string)
+      }, 600)
+      return res.send(data)
+    } catch ({ status, body }) {
+      return next({ status, body })
     }
-    if (!type || !provinceId) {
-      return next({ status: 400, body: { error: '`type` and `provinceId` are required in URL parameter.' } })
-    }
-    return res.send(await cariRS.getHospitals(type as 'covid' | 'noncovid', provinceId as string, cityId as string))
   })
 
   router.get('/bedDetails', async (req, res, next) => {
@@ -112,7 +135,10 @@ app.use('/api/v1', (() => {
     if (!type || !hospitalId) {
       return next({ status: 400, body: { error: '`type` and `hospitalId` are required' } })
     }
-    return res.send(await cariRS.getBedDetails(type as 'covid' | 'noncovid', hospitalId as string))
+    const data = await getFromCacheFirst(`bedDetails:${type}:${hospitalId}`, async () => {
+      return await cariRS.getBedDetails(type as 'covid' | 'noncovid', hospitalId as string)
+    }, 600)
+    return res.send(data)
   })
 
   router.get('/maps', async (req, res, next) => {
@@ -120,7 +146,10 @@ app.use('/api/v1', (() => {
     if (!hospitalId) {
       return next({ status: 400, body: { error: '`hospitalId` id required' } })
     }
-    return res.send(await cariRS.getMaps(hospitalId as string))
+    const data = await getFromCacheFirst(`maps:${hospitalId}`, async () => {
+      return await cariRS.getMaps(hospitalId as string)
+    }, 86400)
+    return res.send(data)
   })
 
   return router
