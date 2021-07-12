@@ -13,7 +13,7 @@ app.use(compression())
 
 async function getFromCacheFirst<T = any>(key: string, fn: () => Promise<T> | T, sec: number = 1) {
   const data = await redis.get(key)
-  if (key) return JSON.parse(data)
+  if (data) return JSON.parse(data)
   const result = await fn()
   await redis.set(key, JSON.stringify(result), 'EX', sec)
   return result
@@ -123,7 +123,7 @@ app.use('/api/v1', (() => {
           }
         }
         if (!type || !provinceId) {
-          throw { status: 400, body: { error: '`type` and `provinceId` are required in URL parameter.' } }
+          throw { status: 400, body: { error: '`type` and `provinceId` or `q` are required in URL parameter.' } }
         }
         return await cariRS.getHospitals(type as 'covid' | 'noncovid', provinceId as string, cityId as string)
       }, 600)
