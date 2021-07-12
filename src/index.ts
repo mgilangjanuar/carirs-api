@@ -1,12 +1,15 @@
-import express, { Router } from 'express'
 import { CariRS } from 'carirs'
-import { Request, Response } from 'express-serve-static-core'
+import compression from 'compression'
 import { NextFunction } from 'connect'
+import express, { Router } from 'express'
+import { Request, Response } from 'express-serve-static-core'
 import Redis from 'ioredis'
 
 const app = express()
 const cariRS = new CariRS()
 const redis = new Redis({ keyPrefix: 'carirs' })
+
+app.use(compression())
 
 async function getFromCacheFirst<T = any>(key: string, fn: () => Promise<T> | T, sec: number = 1) {
   const data = await redis.get(key)
