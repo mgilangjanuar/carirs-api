@@ -7,15 +7,19 @@ import Redis from 'ioredis'
 
 const app = express()
 const cariRS = new CariRS()
-const redis = new Redis({ keyPrefix: 'carirs' })
+const redis = process.env.REDIS_HOST ? new Redis({ host: process.env.REDIS_HOST, keyPrefix: 'carirs' }) : null
 
 app.use(compression())
 
 async function getFromCacheFirst<T = any>(key: string, fn: () => Promise<T> | T, sec: number = 1) {
-  const data = await redis.get(key)
-  if (data) return JSON.parse(data)
+  if (redis) {
+    const data = await redis.get(key)
+    if (data) return JSON.parse(data)
+  }
   const result = await fn()
-  await redis.set(key, JSON.stringify(result), 'EX', sec)
+  if (redis) {
+    await redis.set(key, JSON.stringify(result), 'EX', sec)
+  }
   return result
 }
 
